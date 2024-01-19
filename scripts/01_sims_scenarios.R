@@ -564,19 +564,31 @@ sim3_ns <- simulateAgents(N = 5,
 
 
 leaded <- sim3_ns$XY %>% group_by(indiv) %>% mutate(X = lead(X, default = 0), Y = lead(Y, default = 0))
-distances <- list()
+groups <- list()
+groupNum <- 1
 for(i in 1:max(sim3_ns$XY$indiv)){
   xy_data <- sim3_ns$XY %>% filter(indiv == i)
   xy_data <- xy_data[c("X", "Y")]
   leaded_xy_data <- leaded %>% filter(indiv == i)
   leaded_xy_data <- leaded_xy_data[c("X", "Y")]
-  distances[[i]] <- head(diag(dist(xy_data, leaded_xy_data)), -1)
+  groups[[i]] <- head(diag(dist(xy_data, leaded_xy_data)), -1)
+  index <- 2
   groupNum <- 1
-  distances[[i]] <- ifelse(distances[[i]] > baseAgentStep * 5, groupNum <- groupNum + 1, groupNum)
+  groups[[i]][1] <- groupNum
+  for(dist in groups[[i]]){
+    if(dist > baseAgentStep * 20){
+      groupNum <- groupNum + 1
+    }
+    groups[[i]][index] <- groupNum
+    index <- index + 1
+  }
+  groupNum <- groupNum + 1
 }
 
+sim3_ns$XY <- sim3_ns$XY %>% group_by(indiv) %>% mutate(group = groups[[cur_group_id()]]) %>% ungroup
+
 ggplot() +
-  geom_point(data = sim3_ns$HRCent %>% filter(day %in% 1:3), aes(x = X, y = Y),
+  geom_point(data = sim3_ns$HRCent %>% filter(day %in% 1:20), aes(x = X, y = Y),
              pch = 19, size = 5)+
   geom_point(data = sim3_ns$XY %>% filter(day %in% 1:3) , aes(x = X, y = Y))+
   facet_wrap(~indiv, scales = "free")+theme_minimal()+
@@ -587,9 +599,9 @@ ggplot() +
 indivs <- sample(unique(sim3_ns$XY$indiv), 5)
 p_s3_ns <- sim3_ns$XY %>%
   filter(indiv %in% indivs) %>%
-  ggplot()+
+  ggplot(aes(group = interaction(indiv,group)))+
   geom_path(data = sim3_ns$XY %>% filter(!indiv %in% indivs), 
-            aes(x=  X, y = Y, group = indiv), 
+            aes(x=  X, y = Y, group = interaction(indiv, group)), 
             col = "black", linewidth = 0.1, alpha = 0.2)+
   geom_path(aes(x = X, y = Y, col = indiv),
             linewidth = 1, alpha = 0.9) +
