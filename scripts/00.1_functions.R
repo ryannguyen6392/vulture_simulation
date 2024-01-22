@@ -74,6 +74,7 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
   HRCent <- matrix(data = NA, nrow = N, ncol = 3) # Empty matrix that will store home range centers
   HRCent[,3] <- rep(c(1,2), length.out = nrow(HRCent)) # Assign sex 
   HRcenterDist <- rep(0, N/2) # Initial distance between pairs of agents
+  carcassTotal <- vector(mode =)
 
   # 4. Set initial conditions for individuals ----------------------------------
   # Loop on individuals: set initial conditions
@@ -149,7 +150,7 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
             chance <- runif(1, 0, 1)
             if(chance < 0.5){
               carcass <- data.frame(x=runif(1, -Scl + Scl/8, Scl - Scl/8), y=runif(1, -Scl + Scl/8, Scl - Scl/8), 
-                                    timeToStart=runif(1, 1, DayLength), timeToDecay=rnorm(1, mean=2.5, sd=1))
+                                    timeToStart=runif(1, 1, DayLength), timeToDecay=rnorm(1, mean=2.5 * DayLength, sd=sqrt(DayLength)))
               carcassStorage <- rbind(carcassStorage, carcass)
             }
           }
@@ -175,11 +176,13 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
       }
       Dist[Dist == 0] <- NA # Remove distance to self
       
-      carcassDist <- rep(NA, nrow(carcassStorage)) 
-      if(carcasses && nrow(carcassStorage) > 0){
-        for(i in 1:nrow(carcassStorage)){
-          carcassDist[i] <- stats::dist(rbind(carcassStorage[i, 1:2],
-                                                c(XYind[[Curr_indv]][Curr_timestep,])))
+      if(carcasses){
+        carcassDist <- rep(NA, nrow(carcassStorage)) 
+        if(carcasses && nrow(carcassStorage) > 0){
+          for(i in 1:nrow(carcassStorage)){
+            carcassDist[i] <- stats::dist(rbind(carcassStorage[i, 1:2],
+                                                  c(XYind[[Curr_indv]][Curr_timestep,])))
+          }
         }
       }
       
@@ -213,7 +216,7 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
       }
       
       ## CARCASS PHASE
-      if(length(carcassDist) > 0 && min(carcassDist) < carcassPercepRange){
+      if(carcasses && length(carcassDist) > 0 && min(carcassDist) < carcassPercepRange){
         if(carcassWeight < 0 | carcassWeight >1){stop("socialWeight must be a number between 0 and 1.")}
         carcass <- as.numeric(carcassStorage[which.min(carcassDist), 1:2]) # get carcass location
         ownHRCent <- HRCentPerDay[[dayCount]][Curr_indv, 1:2]
