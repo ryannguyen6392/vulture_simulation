@@ -51,9 +51,10 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
                            asocial = F,
                            spatialAttractors = NULL,
                            spatialPercepRange = 200,
-                           spatialWeight = 0.5,
-                           roostThreshhold = 0.9,
-                           spherical = F
+                           roostThreshhold = 0.7,
+                           spherical = F,
+                           carcasses = F,
+                           
 ){
   
   # 1. Set the seed, if one is provided ----------------------------------------
@@ -89,7 +90,7 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
     
   } # End loop on individuals 
   
-  # 5. Set initial HR storage
+  # 5. Set initial HR storage and carcass storage
   # If the HR's are going to be changing (sim2 or sim3), create a list to store daily HR centers, and set the initial values from HRCent above.
   HRCentPerDay <- vector(mode = "list", length = Days)
   HRCentPerDay[[1]] <- HRCent
@@ -101,6 +102,10 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
     else # set different starting angles
       HRCentPerDay[[1]][, 3] <- runif(N, min=0, 2 * pi)
     HRPhi_ind <- rep(0, N) # Direction of the last step for the HRs
+  }
+  
+  if(carcasses){
+    carcassStorage <- matrix(NA, nrow = 1, ncol = 4) # Nx4 matrix of carcasses that will store x,y and timeToStart and timeToDecay
   }
   
   # 6. Run the simulation ----------------------------------
@@ -135,6 +140,19 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
           HRCentPerDay[[dayCount]][, 3] <- HRPhi_ind # set new mus for next day
         }else{ # if neither of these situations, keep the home range the same.
           HRCentPerDay[[dayCount]] <- HRCentPerDay[[dayCount-1]]
+        }
+        
+        # A2. Optionally add carcasses:
+        if(carcasses){
+          for(i in 1:N){
+            chance <- runif(1, 0, 1)
+            if(chance < 0.5){
+              carcass <- c(runif(1, -Scl + Scl/8, Scl - Scl/8), runif(1, -Scl + Scl/8, Scl - Scl/8), runif(1, 1, DayLength), rnorm(1, mean=2.5, sd=1))
+              carcassStorage <- rbind(carcassStorage, carcass)
+            }
+          }
+          carcassStorage[, 3] <- carcassStorage[, 3] + ifelse(carcassStorage[, 3] > 0, -1, 0)
+          carcassStorage[, 4] <- carcassStorage[, 4] + ifelse(carcassStorage[, 3] <= 0, -1, 0)
         }
       }
     } # end daily moving of HR center
@@ -184,7 +202,8 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
           distToAttractors[spatialAttractor] <- stats::dist(rbind(spatialAttractors[spatialAttractor, ],
                                                                   c(XYind[[Curr_indv]][Curr_timestep,])))
         }
-        BiasPoint <- as.numeric(spatialAttractors[which.min(distToAttractors), ])
+        if(min(distToAttractors) < Soc_Percep_Rng)
+          BiasPoint <- as.numeric(spatialAttractors[which.min(distToAttractors), ])
       }
       # Set direction to the chosen bias point
       coo <- BiasPoint - XYind[[Curr_indv]][Curr_timestep, ] 

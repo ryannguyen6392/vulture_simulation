@@ -599,3 +599,5 @@ p_s3_ns <- sim3_ns$XY %>%
   theme(legend.position = "none")+
   ggtitle("Scenario 3, non-sociable")
 p_s3_ns
+
+## CARCASS TESTING
