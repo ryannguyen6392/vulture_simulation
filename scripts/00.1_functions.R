@@ -161,6 +161,10 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
     # For each individual, set bias point and calculate its next step.
     for(Curr_indv in 1:N){
       # Compute distance of this individual to all other individuals
+      
+      if(!is.na(XYind[[Curr_indv]][Curr_timestep + 1, 1]) && !is.na(XYind[[Curr_indv]][Curr_timestep + 1, 2]))
+        next
+      
       Dist <- rep(NA, N) 
       for(Other_indv in 1:N){
         Dist[Other_indv] <- stats::dist(rbind(XYind[[Other_indv]][Curr_timestep,],
@@ -202,8 +206,15 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
           distToAttractors[spatialAttractor] <- stats::dist(rbind(spatialAttractors[spatialAttractor, ],
                                                                   c(XYind[[Curr_indv]][Curr_timestep,])))
         }
-        if(min(distToAttractors) < Soc_Percep_Rng)
-          BiasPoint <- as.numeric(spatialAttractors[which.min(distToAttractors), ])
+        
+        timeLeft <- DayLength - (Curr_timestep %% DayLength)
+        
+        travel <- as.numeric(spatialAttractors[which.min(distToAttractors), ]) - XYind[[Curr_indv]][Curr_timestep, ]
+        step <- travel / timeLeft
+        
+        for(t in 1:timeLeft){
+          XYind[[Curr_indv]][Curr_timestep+t, ] <- XYind[[Curr_indv]][Curr_timestep+t-1, ] + step
+        }
       }
       # Set direction to the chosen bias point
       coo <- BiasPoint - XYind[[Curr_indv]][Curr_timestep, ] 
@@ -216,10 +227,10 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
       
       # Bias to initial location + CRW to find the von mises center for the next step
       mu.av <- Arg(EtaCRW * exp(Phi_ind[Curr_indv] * (0+1i)) + (1 - EtaCRW) * exp(mu * (0+1i)))
-      
-      if(Curr_timestep %% DayLength >= DayLength * roostThreshhold){
-        Phi_ind[Curr_indv] <- mu
-      } else
+
+      # if(Curr_timestep %% DayLength >= DayLength * roostThreshhold){
+      #   Phi_ind[Curr_indv] <- mu
+      # } else
         # Choose current step direction from von Mises centered around the direction selected above 
         Phi_ind[Curr_indv] <- CircStats::rvm(n=1, mean = mu.av, k = Kappa_ind)
       
