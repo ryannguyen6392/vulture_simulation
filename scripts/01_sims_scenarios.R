@@ -443,8 +443,6 @@ sim1_ns <- simulateAgents(N = 5,
                        HRStpStd = HRStpStd,
                        HRKappa_ind = hrk,
                        spatialAttractors = staticAttractors,
-                       spatialWeight = 1,
-                       spatialPercepRange = Scl/5,
                        roostThreshhold = 0.7)
 
 # hr <- sim1_ns$HRCent %>% as.data.frame() %>% mutate(indiv = 1:nrow(.)) %>% rename("X" = X, "Y" = Y)
@@ -500,8 +498,6 @@ sim3_ns <- simulateAgents(N = 5,
                           HRStpStd = HRStpStd,
                           HRKappa_ind = hrk,
                           spatialAttractors = staticAttractors,
-                          spatialWeight = 0.25,
-                          spatialPercepRange = Scl/5,
                           roostThreshhold = 0.7)
 
 sim3_ns$XY$phase <- ifelse(sim3_ns$XY$StepInDay > 35, "roost", "flying")
@@ -613,3 +609,55 @@ p_s3_ns <- sim3_ns$XY %>%
 p_s3_ns
 
 ## CARCASS TESTING
+
+r <- 0.01 # home range centers effectively not moving
+baseAgentStep <- 7
+HRStpSize <- baseAgentStep*r
+HRStpStd <- HRStpSize*0.75 # leaving this here for now--could go back and change later if we want. 
+hrk <- 0.01
+hre <- 0.7
+
+sim1_ns <- simulateAgents(N = 5,
+                          Days = 10,
+                          DayLength = 50,
+                          Soc_Percep_Rng = 1000,
+                          Scl = 1000,
+                          seed = 9252023,
+                          EtaCRW = 0.7,
+                          StpSize_ind = 7,
+                          StpStd_ind = 5,
+                          Kappa_ind = 4,
+                          quiet = T,
+                          sim_3 = T,
+                          socialWeight = 0,
+                          HREtaCRW = 0.7,
+                          HRStpSize = HRStpSize,
+                          HRStpStd = HRStpStd,
+                          HRKappa_ind = hrk,
+                          carcasses=T)
+
+# hr <- sim1_ns$HRCent %>% as.data.frame() %>% mutate(indiv = 1:nrow(.)) %>% rename("X" = X, "Y" = Y)
+
+ggplot() +
+  geom_point(data = sim1_ns$XY %>% filter(indiv == 1, day %in% 1), aes(x = X, y = Y, col = StepInDay))+
+  geom_point(data = sim1_ns$HRCent %>% filter(indiv == 1, day %in% 1:2), aes(x = X, y = Y), pch = 19, size = 5)+
+  # geom_point(data = staticAttractors, aes(x = x, y = y)) +
+  facet_wrap(~indiv, scales = "free")+theme_minimal()+
+  theme(legend.position = "none", axis.text = element_text(size = 18))+
+  scale_color_viridis()+
+  ggtitle("Scenario 1, non-sociable")
+
+indivs <- sample(unique(sim1_ns$XY$indiv), 5)
+p_s1_ns <- sim1_ns$XY %>%
+  filter(indiv %in% indivs) %>%
+  ggplot() +
+  geom_path(data = sim1_ns$XY %>% filter(!indiv %in% indivs),
+            aes(x=  X, y = Y, group = indiv),
+            col = "black", linewidth = 0.1, alpha = 0.2)+
+  geom_path(aes(x = X, y = Y, col = indiv),
+            linewidth = 1, alpha = 0.9)+
+  theme(legend.position = "none", axis.text = element_text(size = 18))+
+  scale_color_manual(values = as.character(tencolors))+
+  theme_minimal()+
+  theme(legend.position = "none")+
+  ggtitle("Scenario 1, non-sociable")

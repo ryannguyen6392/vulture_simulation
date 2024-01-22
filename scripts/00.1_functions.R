@@ -50,10 +50,11 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
                            sameStartingAngle = 0,
                            asocial = F,
                            spatialAttractors = NULL,
-                           spatialPercepRange = 200,
                            roostThreshhold = 0.7,
                            spherical = F,
                            carcasses = F,
+                           carcassPercepRange = 200,
+                           carcassWeight = 1
                            
 ){
   
@@ -104,9 +105,9 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
     HRPhi_ind <- rep(0, N) # Direction of the last step for the HRs
   }
   
-  if(carcasses){
-    carcassStorage <- matrix(NA, nrow = 1, ncol = 4) # Nx4 matrix of carcasses that will store x,y and timeToStart and timeToDecay
-  }
+  if(carcasses)
+    # Nx4 matrix of carcasses that will store x,y and timeToStart and timeToDecay
+    carcassStorage <- data.frame(x=double(), y=double(), timeToStart=integer(), timeToDecay=integer())
   
   # 6. Run the simulation ----------------------------------
   # Loop on time steps and individuals to run the simulation
@@ -147,12 +148,14 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
           for(i in 1:N){
             chance <- runif(1, 0, 1)
             if(chance < 0.5){
-              carcass <- c(runif(1, -Scl + Scl/8, Scl - Scl/8), runif(1, -Scl + Scl/8, Scl - Scl/8), runif(1, 1, DayLength), rnorm(1, mean=2.5, sd=1))
+              carcass <- data.frame(x=runif(1, -Scl + Scl/8, Scl - Scl/8), y=runif(1, -Scl + Scl/8, Scl - Scl/8), 
+                                    timeToStart=runif(1, 1, DayLength), timeToDecay=rnorm(1, mean=2.5, sd=1))
               carcassStorage <- rbind(carcassStorage, carcass)
             }
           }
-          carcassStorage[, 3] <- carcassStorage[, 3] + ifelse(carcassStorage[, 3] > 0, -1, 0)
-          carcassStorage[, 4] <- carcassStorage[, 4] + ifelse(carcassStorage[, 3] <= 0, -1, 0)
+          carcassStorage$timeToStart <- carcassStorage$timeToStart + ifelse(carcassStorage$timeToStart > 0, -1, 0)
+          carcassStorage$timeToDecay <- carcassStorage$timeToDecay + ifelse(carcassStorage$timeToStart <= 0 & carcassStorage$timeToDecay > 0, -1, 0)
+          carcassStorage <- carcassStorage[carcassStorage$timeToDecay > 0, ]
         }
       }
     } # end daily moving of HR center
@@ -171,6 +174,14 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
                                               c(XYind[[Curr_indv]][Curr_timestep,])))
       }
       Dist[Dist == 0] <- NA # Remove distance to self
+      
+      carcassDist <- rep(NA, nrow(carcassStorage)) 
+      if(carcasses && nrow(carcassStorage) > 0){
+        for(i in 1:nrow(carcassStorage)){
+          carcassDist[i] <- stats::dist(rbind(carcassStorage[i, 1:2],
+                                                c(XYind[[Curr_indv]][Curr_timestep,])))
+        }
+      }
       
       # Calculating the direction to the initial location (bias point )+ now with drift for the current step
       # Set individual bias points in different ways depending on method
@@ -200,6 +211,18 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
           BiasPoint <- meanpoint
         }
       }
+      
+      ## CARCASS PHASE
+      if(length(carcassDist) > 0 && min(carcassDist) < carcassPercepRange){
+        if(carcassWeight < 0 | carcassWeight >1){stop("socialWeight must be a number between 0 and 1.")}
+        carcass <- as.numeric(carcassStorage[which.min(carcassDist), 1:2]) # get carcass location
+        ownHRCent <- HRCentPerDay[[dayCount]][Curr_indv, 1:2]
+        # Take the mean between the home range center and the closest carcass location, and bias towards that mean
+        meanpoint <- (carcassWeight*carcass + (1-carcassWeight)*ownHRCent)
+        BiasPoint <- meanpoint
+      }
+      
+      ## ROOST PHASE
       if(class(spatialAttractors) == "data.frame" && Curr_timestep %% DayLength >= DayLength * roostThreshhold){
         distToAttractors <- rep(NA, nrow(spatialAttractors))
         for(spatialAttractor in 1:nrow(spatialAttractors)){
