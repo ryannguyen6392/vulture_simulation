@@ -402,7 +402,7 @@ ggsave(trajectories_patchwork, filename = "fig/trajectories/trajectories_patchwo
 # Daily displacement distances for each simulation ------------------------
 # Trajectory-long displacements -------------------------------------------
 
-# ATTRACTOR TESTING
+# ATTRACTOR TESTING --------
 
 Scl <- 1000
 
@@ -417,7 +417,7 @@ for(i in 1:4){
 }
 colnames(staticAttractors) <- c("x", "y")
 
-# SIM 1 -------------------------------------------------------------------
+## SIM 1 -------------------------------------------------------------------
 r <- 0.01 # home range centers effectively not moving
 baseAgentStep <- 7
 HRStpSize <- baseAgentStep*r
@@ -472,7 +472,7 @@ p_s1_ns <- sim1_ns$XY %>%
   theme(legend.position = "none")+
   ggtitle("Scenario 1, non-sociable")
 
-# SIM 3 -------------------------------------------------------------------
+## SIM 3 -------------------------------------------------------------------
 r <- 10 # home range steps are 10x the size of agent steps
 baseAgentStep <- 7
 HRStpSize <- baseAgentStep*r
@@ -529,8 +529,9 @@ p_s3_ns <- sim3_ns$XY %>%
   ggtitle("Scenario 3, non-sociable")
 p_s3_ns
 
-## TORUS TESTING
+# TORUS TESTING ------------
 
+## SIM 3 ---------
 r <- 10 # home range steps are 10x the size of agent steps
 baseAgentStep <- 7
 HRStpSize <- baseAgentStep*r
@@ -608,7 +609,9 @@ p_s3_ns <- sim3_ns$XY %>%
   ggtitle("Scenario 3, non-sociable")
 p_s3_ns
 
-## CARCASS TESTING
+# CARCASS TESTING ----------
+
+## SIM 1 --------
 
 r <- 0.01 # home range centers effectively not moving
 baseAgentStep <- 7
@@ -636,7 +639,9 @@ sim1_ns <- simulateAgents(N = 5,
                           HRKappa_ind = hrk,
                           carcasses=T,
                           carcassPercepRange = 200,
-                          carcassWeight = 1)
+                          carcassWeight = 1,
+                          carcassesPerDay = 5,
+                          carcassChance = 0.5)
 
 # hr <- sim1_ns$HRCent %>% as.data.frame() %>% mutate(indiv = 1:nrow(.)) %>% rename("X" = X, "Y" = Y)
 
@@ -664,11 +669,13 @@ p_s1_ns <- sim1_ns$XY %>%
   theme(legend.position = "none")+
   ggtitle("Scenario 1, non-sociable, with carcasses")
 
+## SIM 3 --------
+
 r <- 10 # home range steps are 10x the size of agent steps
 baseAgentStep <- 7
 HRStpSize <- baseAgentStep*r
 HRStpStd <- HRStpSize*0.75 # leaving this here for now--could go back and change later if we want. 
-hrk <- 20 # k = 20, highly directional
+hrk <- 2 # k = 20, highly directional
 hre <- 0.7
 
 sim3_ns <- simulateAgents(N = 5,
@@ -684,13 +691,15 @@ sim3_ns <- simulateAgents(N = 5,
                           quiet = T,
                           sim_3 = T,
                           socialWeight = 0,
-                          HREtaCRW = 0.7,
+                          HREtaCRW = hre,
                           HRStpSize = HRStpSize,
                           HRStpStd = HRStpStd,
                           HRKappa_ind = hrk,
                           carcasses=T,
                           carcassPercepRange = 200,
-                          carcassWeight = 1)
+                          carcassWeight = 0.5,
+                          carcassesPerDay = 5,
+                          carcassChance = 0.5)
 
 ggplot() +
   geom_point(data = sim3_ns$HRCent %>% filter(day %in% 1:20), aes(x = X, y = Y),
@@ -710,8 +719,8 @@ p_s3_ns <- sim3_ns$XY %>%
             col = "black", linewidth = 0.1, alpha = 0.2)+
   geom_path(aes(x = X, y = Y, col = indiv),
             linewidth = 1, alpha = 0.9) +
-  geom_point(aes(x=x, y=y, size=day+(timeToStart/50)), data=sim3_ns$carcasses)+
   theme(legend.position = "none", axis.text = element_text(size = 18))+
+  geom_point(aes(x=x, y=y), data=sim3_ns$carcasses)+
   scale_color_manual(values = as.character(tencolors))+
   theme_minimal()+
   theme(legend.position = "none")+

@@ -49,12 +49,15 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
                            socialWeight = 0, # how much to bias toward another individual, versus toward the home range point. Default is biasing toward the mean between the home range center and the other individual's location. If socialWeight is 1, will bias just toward the other individual. If socialWeight is 0, will not bias toward the other individual.
                            sameStartingAngle = 0, # 0 or 1 flag to determine if all the agents should start moving in the same direction (sim3)
                            asocial = F,
-                           spatialAttractors = NULL, 
-                           roostThreshhold = 0.7,
+                           spatialAttractors = NULL, # Roost locations
+                           roostThreshhold = 0.7, # % of day before finding roost
                            spherical = F,
-                           carcasses = F,
-                           carcassPercepRange = 200,
-                           carcassWeight = 1
+                           carcasses = F, # carcass simulation
+                           carcassPercepRange = 200, # range to detect carcass
+                           carcassWeight = 0.5, # how much to bias toward carcass
+                           meanCarcassLength = 2.5, # average number of days a carcass should last
+                           carcassesPerDay = 6, # number of carcasses to spawn per day
+                           carcassChance = 0.5, # chance to spawn a carcass
                            
 ){
   
@@ -146,25 +149,24 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
         
         # A2. Optionally add carcasses:
         if(carcasses){
-          for(i in 1:N){ # For each agent:
+          for(i in 1:carcassesPerDay){ # For each agent:
             chance <- runif(1, 0, 1)
-            if(chance < 0.5){ # Random chance for carcass spawn
+            if(chance < carcassChance){ # Random chance for carcass spawn
               # Create carcass with time to spawn from start of day and time before disappearing
-              # Set with parameters (TODO)
+              # Set with parameters
               carcass <- data.frame(x=runif(1, -Scl + Scl/8, Scl - Scl/8), y=runif(1, -Scl + Scl/8, Scl - Scl/8), 
-                                    timeToStart=runif(1, 1, DayLength), timeToDecay=rnorm(1, mean=2.5 * DayLength, sd=sqrt(DayLength)),
-                                    day=dayCount)
+                                    timeToStart=runif(1, 1, DayLength), timeToDecay=rnorm(1, mean=meanCarcassLength * DayLength, sd=sqrt(DayLength)),day=dayCount)
               carcassStorage <- rbind(carcassStorage, carcass) # Add carcass to global carcasses
-              carcassTotal <- rbind(carcassTotal, carcass)
+              carcassTotal <- rbind(carcassTotal, carcass) # Add carcass to return carcasses
             }
           }
         }
       }
       # A3. Advance carcass timers and remove decayed carcasses
       if(carcasses){
-        carcassStorage$timeToStart <- carcassStorage$timeToStart + ifelse(carcassStorage$timeToStart > 0, -1, 0)
-        carcassStorage$timeToDecay <- carcassStorage$timeToDecay + ifelse(carcassStorage$timeToStart <= 0 & carcassStorage$timeToDecay > 0, -1, 0)
-        carcassStorage <- carcassStorage[carcassStorage$timeToDecay > 0, ]
+        carcassStorage$timeToStart <- carcassStorage$timeToStart + ifelse(carcassStorage$timeToStart > 0, -1, 0) # advance start timer if carcass has not appeared yet
+        carcassStorage$timeToDecay <- carcassStorage$timeToDecay + ifelse(carcassStorage$timeToStart <= 0 & carcassStorage$timeToDecay > 0, -1, 0) # advance decay timer if carcass has appeared
+        carcassStorage <- carcassStorage[carcassStorage$timeToDecay > 0, ] # remove decayed carcasses
       }
     } # end daily moving of HR center
     
@@ -188,6 +190,9 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
         carcassDist <- rep(NA, nrow(carcassStorage)) 
         if(carcasses && nrow(carcassStorage) > 0){
           for(i in 1:nrow(carcassStorage)){
+            carcass <- carcassStorage[i]
+            if(carcass$timeToStart > 0) # don't consider carcasses that haven't appeared yet today
+              next
             carcassDist[i] <- stats::dist(rbind(carcassStorage[i, 1:2],
                                                   c(XYind[[Curr_indv]][Curr_timestep,])))
           }
@@ -279,16 +284,17 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
       # Save the individual's next location
       XYind[[Curr_indv]][Curr_timestep + 1, ] <- XYind[[Curr_indv]][Curr_timestep, ] + step
       
+      # TESTING: spherical plane
       if(spherical){
-        if(XYind[[Curr_indv]][Curr_timestep + 1, 1] > Scl){
-          XYind[[Curr_indv]][Curr_timestep + 1, 1] <- -Scl + (XYind[[Curr_indv]][Curr_timestep, 1] - Scl)
-        } else if(XYind[[Curr_indv]][Curr_timestep + 1, 1] < -Scl){
-          XYind[[Curr_indv]][Curr_timestep + 1, 1] <- Scl + (XYind[[Curr_indv]][Curr_timestep, 1] - Scl)
+        if(XYind[[Curr_indv]][Curr_timestep + 1, 1] > Scl){ # if past right edge
+          XYind[[Curr_indv]][Curr_timestep + 1, 1] <- -Scl + (XYind[[Curr_indv]][Curr_timestep, 1] - Scl) # wrap to left
+        } else if(XYind[[Curr_indv]][Curr_timestep + 1, 1] < -Scl){ # if past left edge
+          XYind[[Curr_indv]][Curr_timestep + 1, 1] <- Scl + (XYind[[Curr_indv]][Curr_timestep, 1] - Scl) # wrap to right
         }
-        if(XYind[[Curr_indv]][Curr_timestep + 1, 2] > Scl){
-          XYind[[Curr_indv]][Curr_timestep + 1, 2] <- -Scl + (XYind[[Curr_indv]][Curr_timestep, 2] - Scl)
-        } else if(XYind[[Curr_indv]][Curr_timestep + 1, 2] < -Scl){
-          XYind[[Curr_indv]][Curr_timestep + 1, 2] <- Scl + (XYind[[Curr_indv]][Curr_timestep, 2] - Scl)
+        if(XYind[[Curr_indv]][Curr_timestep + 1, 2] > Scl){ # if past top edge
+          XYind[[Curr_indv]][Curr_timestep + 1, 2] <- -Scl + (XYind[[Curr_indv]][Curr_timestep, 2] - Scl) # wrap to bottom
+        } else if(XYind[[Curr_indv]][Curr_timestep + 1, 2] < -Scl){ # if past bottom edge
+          XYind[[Curr_indv]][Curr_timestep + 1, 2] <- Scl + (XYind[[Curr_indv]][Curr_timestep, 2] - Scl) # wrap to top
         }
       }
     } # End loop on individuals
