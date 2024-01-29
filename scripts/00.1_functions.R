@@ -47,9 +47,9 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
                            HRStpSize = 0.01, # Mean step lengths of HRs
                            HRStpStd = 0.01,  # STD of step lengths of HRs
                            socialWeight = 0, # how much to bias toward another individual, versus toward the home range point. Default is biasing toward the mean between the home range center and the other individual's location. If socialWeight is 1, will bias just toward the other individual. If socialWeight is 0, will not bias toward the other individual.
-                           sameStartingAngle = 0,
+                           sameStartingAngle = 0, # 0 or 1 flag to determine if all the agents should start moving in the same direction (sim3)
                            asocial = F,
-                           spatialAttractors = NULL,
+                           spatialAttractors = NULL, 
                            roostThreshhold = 0.7,
                            spherical = F,
                            carcasses = F,
@@ -74,7 +74,7 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
   HRCent <- matrix(data = NA, nrow = N, ncol = 3) # Empty matrix that will store home range centers
   HRCent[,3] <- rep(c(1,2), length.out = nrow(HRCent)) # Assign sex 
   HRcenterDist <- rep(0, N/2) # Initial distance between pairs of agents
-  carcassTotal <- vector(mode =)
+  carcassTotal <- data.frame()
 
   # 4. Set initial conditions for individuals ----------------------------------
   # Loop on individuals: set initial conditions
@@ -92,7 +92,7 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
     
   } # End loop on individuals 
   
-  # 5. Set initial HR storage and carcass storage
+  # 5. Set initial HR storage and carcass storage -------
   # If the HR's are going to be changing (sim2 or sim3), create a list to store daily HR centers, and set the initial values from HRCent above.
   HRCentPerDay <- vector(mode = "list", length = Days)
   HRCentPerDay[[1]] <- HRCent
@@ -146,18 +146,25 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
         
         # A2. Optionally add carcasses:
         if(carcasses){
-          for(i in 1:N){
+          for(i in 1:N){ # For each agent:
             chance <- runif(1, 0, 1)
-            if(chance < 0.5){
+            if(chance < 0.5){ # Random chance for carcass spawn
+              # Create carcass with time to spawn from start of day and time before disappearing
+              # Set with parameters (TODO)
               carcass <- data.frame(x=runif(1, -Scl + Scl/8, Scl - Scl/8), y=runif(1, -Scl + Scl/8, Scl - Scl/8), 
-                                    timeToStart=runif(1, 1, DayLength), timeToDecay=rnorm(1, mean=2.5 * DayLength, sd=sqrt(DayLength)))
-              carcassStorage <- rbind(carcassStorage, carcass)
+                                    timeToStart=runif(1, 1, DayLength), timeToDecay=rnorm(1, mean=2.5 * DayLength, sd=sqrt(DayLength)),
+                                    day=dayCount)
+              carcassStorage <- rbind(carcassStorage, carcass) # Add carcass to global carcasses
+              carcassTotal <- rbind(carcassTotal, carcass)
             }
           }
-          carcassStorage$timeToStart <- carcassStorage$timeToStart + ifelse(carcassStorage$timeToStart > 0, -1, 0)
-          carcassStorage$timeToDecay <- carcassStorage$timeToDecay + ifelse(carcassStorage$timeToStart <= 0 & carcassStorage$timeToDecay > 0, -1, 0)
-          carcassStorage <- carcassStorage[carcassStorage$timeToDecay > 0, ]
         }
+      }
+      # A3. Advance carcass timers and remove decayed carcasses
+      if(carcasses){
+        carcassStorage$timeToStart <- carcassStorage$timeToStart + ifelse(carcassStorage$timeToStart > 0, -1, 0)
+        carcassStorage$timeToDecay <- carcassStorage$timeToDecay + ifelse(carcassStorage$timeToStart <= 0 & carcassStorage$timeToDecay > 0, -1, 0)
+        carcassStorage <- carcassStorage[carcassStorage$timeToDecay > 0, ]
       }
     } # end daily moving of HR center
     
@@ -166,6 +173,7 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
     for(Curr_indv in 1:N){
       # Compute distance of this individual to all other individuals
       
+      # If flight to roost is planned, no need to do anything
       if(!is.na(XYind[[Curr_indv]][Curr_timestep + 1, 1]) && !is.na(XYind[[Curr_indv]][Curr_timestep + 1, 2]))
         next
       
@@ -176,7 +184,7 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
       }
       Dist[Dist == 0] <- NA # Remove distance to self
       
-      if(carcasses){
+      if(carcasses){ # Get distance to carcasses
         carcassDist <- rep(NA, nrow(carcassStorage)) 
         if(carcasses && nrow(carcassStorage) > 0){
           for(i in 1:nrow(carcassStorage)){
@@ -216,29 +224,31 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
       }
       
       ## CARCASS PHASE
+      # If there are available carcasses, and within range...
       if(carcasses && length(carcassDist) > 0 && min(carcassDist) < carcassPercepRange){
         if(carcassWeight < 0 | carcassWeight >1){stop("socialWeight must be a number between 0 and 1.")}
         carcass <- as.numeric(carcassStorage[which.min(carcassDist), 1:2]) # get carcass location
         ownHRCent <- HRCentPerDay[[dayCount]][Curr_indv, 1:2]
-        # Take the mean between the home range center and the closest carcass location, and bias towards that mean
-        meanpoint <- (carcassWeight*carcass + (1-carcassWeight)*ownHRCent)
+        # Take the mean between current bias and the closest carcass location, and bias towards that mean
+        meanpoint <- (carcassWeight*carcass + (1-carcassWeight)*BiasPoint)
         BiasPoint <- meanpoint
       }
       
       ## ROOST PHASE
+      ## If there are set roosts, and it's time for the agents to find a roost
       if(class(spatialAttractors) == "data.frame" && Curr_timestep %% DayLength >= DayLength * roostThreshhold){
-        distToAttractors <- rep(NA, nrow(spatialAttractors))
+        distToAttractors <- rep(NA, nrow(spatialAttractors)) # Get distance to each roost
         for(spatialAttractor in 1:nrow(spatialAttractors)){
           distToAttractors[spatialAttractor] <- stats::dist(rbind(spatialAttractors[spatialAttractor, ],
                                                                   c(XYind[[Curr_indv]][Curr_timestep,])))
         }
         
-        timeLeft <- DayLength - (Curr_timestep %% DayLength)
-        
+        timeLeft <- DayLength - (Curr_timestep %% DayLength) # Time left to get to roost
+        # Distance vector to get to closest roost
         travel <- as.numeric(spatialAttractors[which.min(distToAttractors), ]) - XYind[[Curr_indv]][Curr_timestep, ]
-        step <- travel / timeLeft
+        step <- travel / timeLeft # A step in the direction of the roost
         
-        for(t in 1:timeLeft){
+        for(t in 1:timeLeft){ # Plan out future movements to roost
           XYind[[Curr_indv]][Curr_timestep+t, ] <- XYind[[Curr_indv]][Curr_timestep+t-1, ] + step
         }
       }
@@ -320,7 +330,7 @@ simulateAgents <- function(N = 6, # Number of individuals in the population
   XYind$indiv <- as.character(XYind$indiv)
   names(XYind)[names(XYind) == "V1"] <- "X"
   names(XYind)[names(XYind) == "V2"] <- "Y"
-  out <- list("rName" = rName, "matlabName" = matlabName, "HRCent" = HRReturn, "XY" = XYind)
+  out <- list("rName" = rName, "matlabName" = matlabName, "HRCent" = HRReturn, "XY" = XYind, carcasses = carcassTotal)
   return(out)
 }
 
